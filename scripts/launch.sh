@@ -1,25 +1,17 @@
 #!/usr/bin/env bash
-# launch-coding-16gb.sh — pick a local model, serve it, and start Pi against it.
-# Lives in $HOME. Run it from inside the repo you want to code in (Pi opens in $PWD).
+# launch.sh — pick a local model, serve it, and start Pi against it (the `coding` launcher).
+# Run from the directory you want to code in — Pi opens in $PWD. Serve scripts are its siblings.
 # (all three models below are open-weight: Gemma/Google, gpt-oss/OpenAI, Granite/IBM.)
 #
-#   ~/launch-coding-16gb.sh                 # menu -> serve -> interactive Pi
-#   ~/launch-coding-16gb.sh "build X ..."   # same, but seed Pi with an initial task
-#   ~/launch-coding-16gb.sh --stop          # stop whichever model server is running
+#   coding                 # menu -> serve -> interactive Pi
+#   coding "build X ..."   # same, but seed Pi with an initial task
+#   coding stop            # stop whichever model server is running
 #
-# Env: CODING_16GB_DIR=/path/to/repo  PI_THINKING=medium  PI_PLAIN=1 (skip skills/extension/verify)
+# Env: PI_THINKING=medium  PI_PLAIN=1 (skip skills/extension/verify)
 set -euo pipefail
 
 # ============================ project config ============================
-PROJ="${CODING_16GB_DIR:-}"
-self_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"   # if this copy lives in <repo>/scripts/, use the repo
-[ -z "$PROJ" ] && [ -f "$self_dir/../pi-config/models.json" ] && PROJ="$(cd "$self_dir/.." && pwd)"
-if [ -z "$PROJ" ]; then
-  for c in "$HOME/coding-16gb" "$HOME/code/coding-16gb" "$HOME/workspace/coding-16gb"; do
-    [ -d "$c" ] && { PROJ="$c"; break; }
-  done
-fi
-[ -n "${PROJ:-}" ] && [ -d "$PROJ" ] || { echo "Can't find the coding-16gb repo. Set CODING_16GB_DIR=/path and re-run."; exit 1; }
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"   # serve scripts are our siblings (repo or ~/.local/share/coding)
 
 WIRED_REC=14336   # recommended iogpu.wired_limit_mb for a 16 GB Apple-silicon Mac
 
@@ -84,7 +76,7 @@ if curl -fsS "http://127.0.0.1:$port/v1/models" 2>/dev/null | grep -q "\"$model\
 else
   log="$LOGDIR/serve-$model.log"
   echo "starting $serve on :$port  (log: $log)"
-  nohup bash "$PROJ/scripts/$serve" >"$log" 2>&1 &
+  nohup bash "$SELF_DIR/$serve" >"$log" 2>&1 &
   srv_pid=$!
   printf "loading model"
   ready=0
@@ -109,9 +101,9 @@ elif [ -f "$ext" ]; then
   for s in plan verify tdd autonomy docs; do [ -d "$PI_AGENT/skills/$s" ] && skill_args+=(--skill "$PI_AGENT/skills/$s"); done
   # the `docs` tool comes from devdocs.ts — load it explicitly too, or drop 'docs' from the allowlist if absent
   if [ -f "$devdocs_ext" ]; then ext_args+=(--extension "$devdocs_ext")
-  else tools="${tools//,docs/}"; echo "note: $devdocs_ext missing → dropping 'docs' tool (run $PROJ/scripts/install.sh)."; fi
+  else tools="${tools//,docs/}"; echo "note: $devdocs_ext missing → dropping 'docs' tool (reinstall to enable it)."; fi
 else
-  echo "note: $ext missing → dropping 'verify'+'docs' tools (run $PROJ/scripts/install.sh to enable them)."
+  echo "note: $ext missing → dropping 'verify'+'docs' tools (reinstall to enable them)."
   tools="read,bash,edit,write,grep,find,ls"
 fi
 

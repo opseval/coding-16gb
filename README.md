@@ -42,23 +42,25 @@ brew install llama.cpp node && pip3 install --user -U huggingface_hub
 echo 'export PATH="$(python3 -m site --user-base)/bin:$PATH"' >> ~/.zprofile && source ~/.zprofile
 npm i -g @earendil-works/pi-coding-agent
 
-scripts/download-models.sh              # Gemma 4 12B (~7 GB); --with-granite for the fast/cool alt
+./scripts/install.sh --with-docs        # copy-deploy into ~/.local + ~/.pi/agent, add `coding` to PATH, fetch docsets
+source ~/.zprofile                      # or open a new shell — puts `coding` on PATH
+coding models                           # Gemma 4 12B (~7 GB); --alt for the gpt-oss reasoning fallback
 sudo sysctl iogpu.wired_limit_mb=14336  # GPU wired ceiling (a ceiling, not a reservation; never 16000 on 16 GB)
-scripts/install.sh --with-docs          # deploy harness -> ~/.pi/agent, and fetch the offline docsets
-scripts/serve-gemma.sh                  # start the model server (its own terminal)
-scripts/smoke-test.sh                   # verify the endpoint + tool-calls
+coding serve gemma                      # start the model server (its own terminal)
+coding smoke                            # verify the endpoint + tool-calls
 ```
 
-Then start coding:
+After install the clone is no longer referenced — you can delete it. (Working *on* the repo? Use
+`./scripts/install.sh --link` for live-edit config.) Then start coding from any directory:
 
 ```bash
-scripts/launch-coding-16gb.sh           # interactive Pi with the full scaffolding + tools wired
+coding                                   # interactive Pi with the full scaffolding + tools wired (opens in $PWD)
 ```
 
 Or run unattended, with checkpoints, caps, and thermal cooldown:
 
 ```bash
-scripts/pi-watch.sh my-session "Build <thing> until the tests pass; append <<DONE>> to NOTES.md when complete."
+coding watch my-session "Build <thing> until the tests pass; append <<DONE>> to NOTES.md when complete."
 ```
 
 ## How the scaffolding works
@@ -121,12 +123,12 @@ compaction is tuned for it, and one model fits in 16 GB at a time.
 
 ## Usage
 
-- **Interactive:** `scripts/launch-coding-16gb.sh` — Pi with the model, tools, extensions, and skills
-  all wired. Switch models with `Ctrl+P`.
-- **Autonomous:** `scripts/pi-watch.sh <session> "<task>"` — resumes on a loop with git checkpoints,
+- **Interactive:** `coding` — Pi with the model, tools, extensions, and skills all wired, opening in the
+  current directory. Switch models with `Ctrl+P`, or preselect with `coding serve <model>`.
+- **Autonomous:** `coding watch <session> "<task>"` — resumes on a loop with git checkpoints,
   wall-clock/iteration caps, thermal cooldown, forced compaction when the session grows large, and a
   `<<DONE>>` completion signal.
-- **Offline docs setup / refresh:** `scripts/devdocs-download.sh` (add any slug from devdocs.io);
+- **Offline docs setup / refresh:** `coding docs` (add any slug from devdocs.io);
   `scripts/devdocs-smoke.sh` to verify. An optional browsable DevDocs web UI is available via
   `scripts/devdocs-container.sh` (opt-in; uses Colima).
 
@@ -151,8 +153,11 @@ compaction is tuned for it, and one model fits in 16 GB at a time.
   own output budget as context approaches the window; the watchdog compacts (via `scripts/pi-compact.py`)
   to keep each iteration's context low. Set to 0 to disable.
 
-Deploy is symlink-based: the repo stays the source of truth. `scripts/install.sh --status` shows what's
-deployed; `scripts/install.sh --uninstall` cleanly removes it.
+Deploy is copy-based: `./scripts/install.sh` copies the harness into `~/.local/share/coding` + `~/.pi/agent`
+and puts a `coding` command on PATH, so the clone is deletable afterward. `coding status` shows what's
+deployed; `coding uninstall` removes it (add `--purge` to also delete the models and docsets). To develop
+on the repo with live-edit config instead, use `./scripts/install.sh --link` (symlinks, repo stays the
+source of truth).
 
 ## License
 
