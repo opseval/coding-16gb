@@ -11,6 +11,11 @@ assert '[ -f "$HOME/.local/share/coding/serve-gemma.sh" ]'      "serve script co
 assert '[ -f "$HOME/.local/share/coding/pi-config/models.json" ]' "pi-config copied to share"
 assert '[ -f "$HOME/.pi/agent/models.json" ] && [ ! -L "$HOME/.pi/agent/models.json" ]' "config is a COPY, not a symlink"
 assert '[ -f "$HOME/.pi/agent/settings.json" ]'                 "settings copied to pi dir"
+# extensions ship with their support files, not just the .ts entrypoints (devdocs.ts requires lib/devdocs-core.mjs)
+if [ -e "$REPO/extensions/lib/devdocs-core.mjs" ]; then
+  assert '[ -f "$HOME/.pi/agent/extensions/lib/devdocs-core.mjs" ]' "extension support module (lib/*.mjs) copied"
+fi
+assert '[ -f "$HOME/.pi/agent/extensions/frontier-scaffold.ts" ]' "extension entrypoint (.ts) copied"
 assert 'grep -qF "# >>> coding install (PATH) >>>" "$HOME/.zprofile"' "PATH block written"
 assert '[ -f "$HOME/.local/share/coding/.manifest" ]'          "manifest written"
 assert 'grep -q ".local/bin/coding" "$HOME/.local/share/coding/.manifest"' "manifest lists the shim"

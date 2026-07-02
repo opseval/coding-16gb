@@ -84,11 +84,14 @@ deploy_pi_files() { # copy or link based on $MODE
     if [ "$MODE" = link ]; then run "ln -s '${d%/}' '$PI_DIR/skills/$name'"
     else run "cp -R '${d%/}' '$PI_DIR/skills/$name'"; fi
   done
-  for e in "$REPO"/extensions/*.ts; do
+  # Copy every top-level entry, not just *.ts: an extension may ship support files (e.g. devdocs.ts
+  # requires ./lib/devdocs-core.mjs). A .ts symlink resolves its require against the repo, but a COPY
+  # needs its siblings copied too.
+  for e in "$REPO"/extensions/*; do
     [ -e "$e" ] || continue
     local name; name="$(basename "$e")"; backup_if_real "$PI_DIR/extensions/$name"
     if [ "$MODE" = link ]; then run "ln -s '$e' '$PI_DIR/extensions/$name'"
-    else run "cp '$e' '$PI_DIR/extensions/$name'"; fi
+    else run "cp -R '$e' '$PI_DIR/extensions/$name'"; fi
   done
 }
 
@@ -122,7 +125,7 @@ EOF
     { echo "$CODING_CMD"; echo "$CODING_HOME"
       for f in models.json settings.json; do echo "$PI_DIR/$f"; done
       for d in "$REPO"/skills/*/; do [ -e "${d}SKILL.md" ] && echo "$PI_DIR/skills/$(basename "$d")"; done
-      for e in "$REPO"/extensions/*.ts; do [ -e "$e" ] && echo "$PI_DIR/extensions/$(basename "$e")"; done
+      for e in "$REPO"/extensions/*; do [ -e "$e" ] && echo "$PI_DIR/extensions/$(basename "$e")"; done
     } > "$CODING_MANIFEST"
   fi
 fi
