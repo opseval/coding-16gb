@@ -124,7 +124,8 @@ compaction is tuned for it, and one model fits in 16 GB at a time.
 - **Interactive:** `scripts/launch-coding-16gb.sh` — Pi with the model, tools, extensions, and skills
   all wired. Switch models with `Ctrl+P`.
 - **Autonomous:** `scripts/pi-watch.sh <session> "<task>"` — resumes on a loop with git checkpoints,
-  wall-clock/iteration caps, thermal cooldown, and a `<<DONE>>` completion signal.
+  wall-clock/iteration caps, thermal cooldown, forced compaction when the session grows large, and a
+  `<<DONE>>` completion signal.
 - **Offline docs setup / refresh:** `scripts/devdocs-download.sh` (add any slug from devdocs.io);
   `scripts/devdocs-smoke.sh` to verify. An optional browsable DevDocs web UI is available via
   `scripts/devdocs-container.sh` (opt-in; uses Colima).
@@ -145,6 +146,10 @@ compaction is tuned for it, and one model fits in 16 GB at a time.
 - `PI_DEVDOCS_DIR` — override the docsets dir (default `~/.pi/devdocs/docs`).
 - `PI_SCAFFOLD_GUARD=0` / `PI_SCAFFOLD_AUTOCOMMIT=0` / `PI_SCAFFOLD_PLAN=<file>` — tune the scaffold.
 - `PI_TOOLS`, `PI_SKILLS`, `PI_THINKING`, and the caps in `scripts/pi-watch.sh` — tune autonomous runs.
+- `PI_COMPACT_AT` — token threshold (default 20480) at which `pi-watch.sh` forces a compaction
+  between iterations. Print mode never auto-compacts, so a small local model would otherwise starve its
+  own output budget as context approaches the window; the watchdog compacts (via `scripts/pi-compact.py`)
+  to keep each iteration's context low. Set to 0 to disable.
 
 Deploy is symlink-based: the repo stays the source of truth. `scripts/install.sh --status` shows what's
 deployed; `scripts/install.sh --uninstall` cleanly removes it.

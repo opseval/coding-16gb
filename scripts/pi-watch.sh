@@ -29,7 +29,14 @@ TOOLS="${PI_TOOLS:-read,bash,edit,write,grep,find,ls,verify,docs}"
 THINKING="${PI_THINKING:-medium}"
 WORKDIR="${PI_WATCH_WORKDIR:-$PWD}"
 LOG="${PI_LOG:-$HOME/pi-session.log}"
+# Force compaction between iterations once the session context reaches this many tokens.
+# Print mode (`pi -p`) does NOT auto-compact (only the interactive/rpc path does), so an
+# autonomous loop must trigger it or it starves its own output budget near the context window.
+# Default = models.json contextWindow (32768) - settings.json reserveTokens (12288) = 20480.
+COMPACT_AT="${PI_COMPACT_AT:-20480}"
 PI_AGENT="${PI_CODING_AGENT_DIR:-${PI_AGENT_DIR:-$HOME/.pi/agent}}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMPACT_HELPER="$SCRIPT_DIR/pi-compact.py"
 SKILLS_DIR="$PI_AGENT/skills"
 EXT_FILE="$PI_AGENT/extensions/frontier-scaffold.ts"
 
@@ -66,6 +73,47 @@ RESUME_MSG="Resume autonomous work: read PLAN.md and NOTES.md, continue the next
 notify() { osascript -e "display notification \"$1\" with title \"pi-watch\"" >/dev/null 2>&1 || true; }
 is_done() { [ -f "$WORKDIR/NOTES.md" ] && grep -q '<<DONE>>' "$WORKDIR/NOTES.md"; }
 
+# Current session context size = the last assistant message's server-reported total tokens.
+session_tokens() {
+  [ -f "$SESSION" ] || { echo 0; return; }
+  python3 - "$SESSION" <<'PY' 2>/dev/null || echo 0
+import json, sys
+tot = 0
+for line in open(sys.argv[1]):
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        r = json.loads(line)
+    except ValueError:
+        continue
+    m = r.get("message", r)
+    if m.get("role") == "assistant":
+        t = (m.get("usage") or {}).get("totalTokens")
+        if isinstance(t, int):
+            tot = t
+print(tot)
+PY
+}
+
+# Force a compaction when the session has grown past COMPACT_AT. Print mode never
+# compacts on its own, so without this an autonomous run starves its own output
+# budget near the context window (finish_reason "length", ~0 output). Fail-soft:
+# a missing helper/python must not stop the run — compaction is a health measure,
+# not a correctness gate.
+maybe_compact() {
+  [ "$COMPACT_AT" -gt 0 ] 2>/dev/null || return 0
+  local ctx; ctx="$(session_tokens)"
+  [ "$ctx" -ge "$COMPACT_AT" ] 2>/dev/null || return 0
+  if ! command -v python3 >/dev/null 2>&1 || [ ! -f "$COMPACT_HELPER" ]; then
+    echo "pi-watch: WARN session ~${ctx} tok >= ${COMPACT_AT} but pi-compact.py/python3 unavailable — skipping compaction" | tee -a "$LOG"
+    return 0
+  fi
+  echo "pi-watch: session ~${ctx} tok >= ${COMPACT_AT} — forcing compaction" | tee -a "$LOG"
+  python3 "$COMPACT_HELPER" "$SESSION" -- --thinking "$THINKING" >>"$LOG" 2>&1 \
+    || echo "pi-watch: WARN compaction helper exited non-zero (continuing)" | tee -a "$LOG"
+}
+
 start="$(date +%s)"
 iter=0
 echo "pi-watch: session=$SESSION workdir=$WORKDIR wall=${MAX_WALL}s iters=$MAX_ITERS" | tee -a "$LOG"
@@ -82,6 +130,8 @@ while :; do
      "${skill_args[@]}" "${ext_args[@]}" "$MSG" >>"$LOG" 2>&1 || echo "pi-watch: agent exited non-zero (crash/OOM?)" | tee -a "$LOG"
 
   if is_done; then echo "pi-watch: <<DONE>> found — task complete" | tee -a "$LOG"; notify "session complete"; break; fi
+  # Compact before the next iteration if the session has grown too large (print mode won't do it itself).
+  maybe_compact
   echo "pi-watch: not done, cooling ${COOLDOWN}s then resuming" | tee -a "$LOG"
   sleep "$COOLDOWN"
 done

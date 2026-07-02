@@ -7,8 +7,8 @@
   "enableSkillCommands": true,
   "compaction": {
     "enabled": true,
-    "reserveTokens": 8192,
-    "keepRecentTokens": 4000
+    "reserveTokens": 12288,
+    "keepRecentTokens": 3000
   },
   "retry": {
     "enabled": true,
