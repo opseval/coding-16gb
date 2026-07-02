@@ -1,0 +1,4 @@
+{
+  "library/subprocess": "<h1>subprocess</h1><dl><dt id=\"subprocess.run\"><code>subprocess.run(args, *, timeout=None)</code></dt><dd><p>Run the command described by <em>args</em> and wait, with an optional <em>timeout</em>.</p></dd><dt id=\"subprocess.Popen\"><code>subprocess.Popen(args)</code></dt><dd><p>Execute a child program in a new process.</p></dd></dl>",
+  "library/functions": "<dl><dt id=\"print\"><code>print(*objects, sep=' ')</code></dt><dd><p>Print objects to the text stream.</p></dd></dl>"
+}

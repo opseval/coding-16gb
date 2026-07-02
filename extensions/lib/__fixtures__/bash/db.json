@@ -1,0 +1,3 @@
+{
+  "bash-builtins": "<dl><dt id=\"printf\"><code>printf [-v var] format [arguments]</code></dt><dd><p>Write the formatted arguments to standard output.</p></dd><dt id=\"read\"><code>read [-r] [name ...]</code></dt><dd><p>Read one line from standard input.</p></dd></dl>"
+}

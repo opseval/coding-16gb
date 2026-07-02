@@ -1,0 +1,22 @@
+{
+  "defaultProvider": "gemma-local",
+  "defaultModel": "gemma-4-12b",
+  "defaultThinkingLevel": "medium",
+  "hideThinkingBlock": true,
+  "quietStartup": true,
+  "enableSkillCommands": true,
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 8192,
+    "keepRecentTokens": 4000
+  },
+  "retry": {
+    "enabled": true,
+    "maxRetries": 3
+  },
+  "enabledModels": [
+    "gemma-local/gemma-4-12b",
+    "gptoss-local/gpt-oss-20b",
+    "granite-local/granite-4-tiny"
+  ]
+}

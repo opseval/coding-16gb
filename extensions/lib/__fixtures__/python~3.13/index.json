@@ -1,0 +1,8 @@
+{
+  "entries": [
+    {"name": "subprocess.run", "path": "library/subprocess#subprocess.run", "type": "subprocess"},
+    {"name": "subprocess.Popen", "path": "library/subprocess#subprocess.Popen", "type": "subprocess"},
+    {"name": "print", "path": "library/functions#print", "type": "Built-in Functions"}
+  ],
+  "types": [{"name": "subprocess", "count": 2, "slug": "subprocess"}]
+}

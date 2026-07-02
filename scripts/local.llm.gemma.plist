@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Keep the PRIMARY model server (Gemma 4 12B on :8080) running and auto-restart it.
+  User LaunchAgent — runs as you, starts at login, restarts on crash/leak.
+
+  Install (edit the path to serve-gemma.sh if your repo isn't at the path below):
+    cp scripts/local.llm.gemma.plist ~/Library/LaunchAgents/local.llm.gemma.plist
+    # then edit ProgramArguments path to the absolute path of serve-gemma.sh
+    launchctl load -w ~/Library/LaunchAgents/local.llm.gemma.plist
+  Stop / switch to an alternate model:
+    launchctl unload ~/Library/LaunchAgents/local.llm.gemma.plist   # frees the RAM
+    scripts/serve-gptoss.sh   # or serve-granite.sh
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.llm.gemma</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>REPLACE_WITH_ABSOLUTE_PATH/scripts/serve-gemma.sh</string>
+  </array>
+  <!-- launchd uses a minimal PATH that excludes /opt/homebrew/bin, so llama-server isn't found and
+       KeepAlive restart-loops every 30s. Give it Homebrew on PATH. (install.sh --launchd templates
+       both this and the absolute script path above.) -->
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>StandardOutPath</key><string>/tmp/llm-gemma.log</string>
+  <key>StandardErrorPath</key><string>/tmp/llm-gemma.err</string>
+</dict>
+</plist>

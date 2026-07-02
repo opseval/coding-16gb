@@ -1,0 +1,17 @@
+# local model weights — never commit
+*.gguf
+*.safetensors
+*.mlx
+models/
+
+# secrets / live Pi auth — keep out of the repo
+**/auth.json
+*.key
+.env
+
+# macOS
+.DS_Store
+
+# logs / runtime
+*.log
+logs/

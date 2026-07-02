@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Pin the Metal GPU wired-memory CEILING to 14336 MB (14 GB) at every boot.
+  This is a ceiling, NOT a reservation — Gemma still only wires ~7-8 GB, so 14336 is free for the
+  primary; the extra headroom is what lets the MARGINAL gpt-oss-20b alternate (~12 GB weights + 16K
+  q8 KV + Metal scratch) load. Still leaves ~2 GB guaranteed for macOS.
+  NEVER set 16000 — that ≈ physical RAM, mlock starves macOS → swap death-spiral.
+
+  Install (one time):
+    sudo cp scripts/local.iogpu.wired.plist /Library/LaunchDaemons/local.iogpu.wired.plist
+    sudo chown root:wheel /Library/LaunchDaemons/local.iogpu.wired.plist
+    sudo launchctl load -w /Library/LaunchDaemons/local.iogpu.wired.plist
+  Apply now without rebooting:
+    sudo sysctl iogpu.wired_limit_mb=14336
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.iogpu.wired</string>
+  <key>RunAtLoad</key><true/>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/sbin/sysctl</string>
+    <string>iogpu.wired_limit_mb=14336</string>
+  </array>
+  <key>StandardOutPath</key><string>/var/log/local.iogpu.wired.log</string>
+  <key>StandardErrorPath</key><string>/var/log/local.iogpu.wired.log</string>
+</dict>
+</plist>

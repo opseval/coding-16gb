@@ -1,0 +1,7 @@
+{
+  "entries": [
+    {"name": "printf", "path": "bash-builtins#printf", "type": "Builtins"},
+    {"name": "read", "path": "bash-builtins#read", "type": "Builtins"}
+  ],
+  "types": [{"name": "Builtins", "count": 2, "slug": "builtins"}]
+}
