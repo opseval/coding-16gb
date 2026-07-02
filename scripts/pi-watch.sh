@@ -49,7 +49,9 @@ esac
 # deployed, drop it from the allowlist with a warning instead of aborting the run.
 DEVDOCS_EXT="$PI_AGENT/extensions/devdocs.ts"
 case ",$TOOLS," in
-  *,docs,*) [ -f "$DEVDOCS_EXT" ] || { echo "pi-watch: WARN 'docs' in \$TOOLS but $DEVDOCS_EXT missing → dropping it (run scripts/install.sh)."; TOOLS="${TOOLS//,docs/}"; } ;;
+  *,docs,*) [ -f "$DEVDOCS_EXT" ] || { echo "pi-watch: WARN 'docs' in \$TOOLS but $DEVDOCS_EXT missing → dropping it (run scripts/install.sh)."
+              # comma-pad so 'docs' strips even as the first (or only) entry of a user-supplied $TOOLS
+              TOOLS=",$TOOLS,"; TOOLS="${TOOLS//,docs,/,}"; TOOLS="${TOOLS#,}"; TOOLS="${TOOLS%,}"; } ;;
 esac
 ext_args=(); [ -f "$EXT_FILE" ] && ext_args=(--extension "$EXT_FILE")
 # devdocs.ts is loaded explicitly (like frontier-scaffold) so the `docs` tool is registered in this
