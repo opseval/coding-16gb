@@ -36,8 +36,9 @@ task.
 ## Quickstart
 
 ```bash
+xcode-select -p >/dev/null 2>&1 || xcode-select --install   # Xcode Command Line Tools (git + compilers) — a fresh Mac has none; wait for it to finish
 git clone https://github.com/opseval/coding-16gb.git && cd coding-16gb
-brew install llama.cpp node && pip3 install --user -U huggingface_hub
+brew install llama.cpp node && pip3 install --user -U huggingface_hub   # if `brew` is missing: https://brew.sh
 #   pip --user CLIs (hf) install off-PATH; add them for login shells:
 echo 'export PATH="$(python3 -m site --user-base)/bin:$PATH"' >> ~/.zprofile && source ~/.zprofile
 npm i -g @earendil-works/pi-coding-agent
