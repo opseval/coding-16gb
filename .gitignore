@@ -15,3 +15,6 @@ models/
 # logs / runtime
 *.log
 logs/
+
+# python bytecode
+__pycache__/
