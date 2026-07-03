@@ -72,12 +72,21 @@ Each piece targets a specific way a small model fails.
 can't be trusted with:
 
 - **Guardrail.** Blocks `sudo`, `rm -rf` on absolute/home paths, `curl | sh`, outward `git push`, and
-  auto-blocks network installs in unattended mode — so a long autonomous run is safe by default.
+  auto-blocks network installs in unattended mode. It also blocks **foreground servers and watchers**
+  (`uvicorn`, `npm run dev`, `tail -f`, `tsc --watch`, `celery worker` …) that would hang the agent —
+  the agent's shell tool waits for the command to exit and a server never does — handing back a
+  background-and-poll or `timeout` recipe instead of a flat refusal (`PI_SCAFFOLD_STALLGUARD=0` opts out).
 - **`verify` gate.** A deterministic done-gate (ruff / pytest / shellcheck / bats). The model may **not**
   declare a step complete on its own judgment; exit codes decide. On all-green it commits a git
   checkpoint. *The harness owns the verdict, not the model.*
 - **Plan anchor.** Re-injects your `PLAN.md` into context every turn, so recency can't override the
   original goal on a long session.
+
+**`context-guard` extension** (`extensions/context-guard.ts`) — bounds context *inside* a long agent
+run. The agent only compacts *between* turns, so one many-round turn can grow past the point where the
+model's output budget collapses (an unrecoverable wedge). The guard runs on every model request: it
+caps/elides old tool output, and if a compaction's own summary wouldn't fit the window it substitutes a
+deterministic digest. It reads the active model's context window at runtime, so it needs no tuning.
 
 **Skills** (`skills/`) — on-demand procedures the model loads for a task: `plan` (write an atomic,
 verifiable `PLAN.md` first), `verify` (use the gate), `tdd` (test-first), `autonomy` (survive a long
@@ -139,7 +148,7 @@ compaction is tuned for it, and one model fits in 16 GB at a time.
 |------|---------|
 | `scripts/` | install, model serving, autonomous watchdog, smoke tests, docset tooling |
 | `pi-config/` | `models.json` + `settings.json` deployed to `~/.pi/agent/` |
-| `extensions/` | the `frontier-scaffold` and `docs` (`devdocs`) Pi extensions |
+| `extensions/` | the `frontier-scaffold`, `context-guard`, and `docs` (`devdocs`) Pi extensions |
 | `skills/` | `plan` / `verify` / `tdd` / `autonomy` / `docs` procedures |
 | `docs/` | the `docs`-tool design + rationale |
 

@@ -59,6 +59,12 @@ ext_args=(); [ -f "$EXT_FILE" ] && ext_args=(--extension "$EXT_FILE")
 # devdocs.ts is loaded explicitly (like frontier-scaffold) so the `docs` tool is registered in this
 # run path; only when it survived the fail-soft check above.
 case ",$TOOLS," in *,docs,*) ext_args+=(--extension "$DEVDOCS_EXT") ;; esac
+# context-guard.ts bounds context MID-run (Pi + maybe_compact only act BETWEEN iterations; a single
+# 47-round iteration can still wedge at the zero-cliff without it). Fail-soft: a missing guard must
+# not stop an autonomous run — it just runs unguarded, warn and continue.
+CTXGUARD_EXT="$PI_AGENT/extensions/context-guard.ts"
+if [ -f "$CTXGUARD_EXT" ]; then ext_args+=(--extension "$CTXGUARD_EXT")
+else echo "pi-watch: WARN $CTXGUARD_EXT missing → no mid-run context guard (run scripts/install.sh)."; fi
 
 skill_args=()
 for s in ${PI_SKILLS:-plan verify tdd autonomy docs}; do

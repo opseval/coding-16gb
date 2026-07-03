@@ -93,6 +93,7 @@ fi
 # ---- Pi capability args: skills + frontier-scaffold extension (the stack's structure layer) ----
 tools="read,bash,edit,write,grep,find,ls,verify,docs"
 ext="$PI_AGENT/extensions/frontier-scaffold.ts"; devdocs_ext="$PI_AGENT/extensions/devdocs.ts"
+ctxguard_ext="$PI_AGENT/extensions/context-guard.ts"
 ext_args=(); skill_args=()
 if [ -n "${PI_PLAIN:-}" ]; then
   tools="read,bash,edit,write,grep,find,ls"
@@ -102,6 +103,10 @@ elif [ -f "$ext" ]; then
   # the `docs` tool comes from devdocs.ts — load it explicitly too, or drop 'docs' from the allowlist if absent
   if [ -f "$devdocs_ext" ]; then ext_args+=(--extension "$devdocs_ext")
   else tools="${tools//,docs/}"; echo "note: $devdocs_ext missing → dropping 'docs' tool (reinstall to enable it)."; fi
+  # context-guard bounds context MID-run (Pi never compacts between tool rounds — the zero-cliff wedge).
+  # Fail-soft: without it Pi still runs, just unguarded inside long agent runs.
+  if [ -f "$ctxguard_ext" ]; then ext_args+=(--extension "$ctxguard_ext")
+  else echo "note: $ctxguard_ext missing → no mid-run context guard (reinstall to enable it)."; fi
 else
   echo "note: $ext missing → dropping 'verify'+'docs' tools (reinstall to enable them)."
   tools="read,bash,edit,write,grep,find,ls"

@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # devdocs-download.sh — fetch DevDocs docsets (offline JSON) into ~/.pi/devdocs/docs.
-#   scripts/devdocs-download.sh                    # the 6 defaults (python bash node js ts git)
+#   scripts/devdocs-download.sh                    # the defaults (python bash node js ts git + web stack)
 #   scripts/devdocs-download.sh python~3.13 rust   # specific slugs (see https://devdocs.io)
 #   scripts/devdocs-download.sh --refresh          # re-download even if already present
 #   scripts/devdocs-download.sh --list             # list installed docsets + versions
 # Each docset is ~0.3-7MB compressed. Source: https://downloads.devdocs.io/<slug>.tar.gz
 # (tarball contains index.json + db.json + meta.json — the only files the `docs` tool reads).
+# More web-stack slugs available (add explicitly): flask click werkzeug express.
+# NOTE: DevDocs has NO sqlalchemy or pytest docset — the `docs` tool can't help with those.
 set -euo pipefail
 
 DIR="${PI_DEVDOCS_DIR:-$HOME/.pi/devdocs/docs}"
 BASE="https://downloads.devdocs.io"
-DEFAULTS=(python~3.13 bash node javascript typescript git)
+# Universal basics + the common Python/JS web stack this box's model reaches for (fastapi/requests
+# verified present on DevDocs 2026-07-03; all others confirmed downloadable).
+DEFAULTS=(python~3.13 bash node javascript typescript git fastapi requests)
 REFRESH=0; LIST=0; SLUGS=()
 for a in "$@"; do
   case "$a" in

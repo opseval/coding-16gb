@@ -6,8 +6,12 @@
  * the things the model can't be trusted to:
  *
  *   1. Guardrail   — block sudo / rm -rf / curl|sh / outward git push via `tool_call`.
+ *                    ALSO blocks foreground servers/watchers (uvicorn, npm run dev, tail -f,
+ *                    tsc --watch …) that would hang the agent loop — Pi's bash tool waits for
+ *                    the command to exit and a server never does (a real on-device stall).
  *                    Auto-blocks in print mode (-p) where there is no UI to confirm,
- *                    so unattended runs are safe by default.
+ *                    so unattended runs are safe by default. Rules + tests live in
+ *                    lib/bash-guard-core.mjs.
  *   2. verify tool — deterministic done-gate (ruff / pytest / shellcheck / bats).
  *                    The model may never self-declare done; exit codes decide.
  *                    On all-green it git-commits a checkpoint. *Harness owns the verdict.*
@@ -20,7 +24,8 @@
  * Env knobs:
  *   PI_SCAFFOLD_AUTOCOMMIT=0   disable the auto git checkpoint on green verify
  *   PI_SCAFFOLD_PLAN=PLAN.md   plan filename to inject (default PLAN.md)
- *   PI_SCAFFOLD_GUARD=0        disable the bash guardrail (NOT recommended for autonomy)
+ *   PI_SCAFFOLD_GUARD=0        disable the bash guardrail entirely (NOT recommended for autonomy)
+ *   PI_SCAFFOLD_STALLGUARD=0   disable ONLY the foreground-server/watcher block (for a supervised run)
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
@@ -29,39 +34,16 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+// Guardrail rules (HARD/STALL/SOFT classification) live in a zero-dep, unit-tested sibling core.
+import { classifyBash, stallGuidance, softReason } from "./lib/bash-guard-core.mjs";
 
 const AUTO_COMMIT = process.env.PI_SCAFFOLD_AUTOCOMMIT !== "0";
 const GUARD_ON = process.env.PI_SCAFFOLD_GUARD !== "0";
+const STALL_GUARD = process.env.PI_SCAFFOLD_STALLGUARD !== "0";
 const PLAN_FILE = process.env.PI_SCAFFOLD_PLAN ?? "PLAN.md";
 const PLAN_INJECT_CAP = 6000; // chars of PLAN.md injected into the system prompt
 
-// --- bash guardrail ---
-// HARD_DENY: always blocked (no override). All rules match across newlines/positions.
-const HARD_DENY: { re: RegExp; why: string }[] = [
-  { re: /(^|[;&|\n])\s*sudo\b/, why: "sudo is denied" },
-  { re: /--no-preserve-root\b/, why: "rm --no-preserve-root (root-wipe override)" },
-  // recursive + force rm targeting an absolute (non-tmp), home, or parent path — any flag order/form
-  { re: /\brm\b(?=[^\n]*(?:-[a-z]*r|--recursive))(?=[^\n]*(?:-[a-z]*f|--force))(?=[^\n]*(?:\s|=|["'])(?:\/(?!(?:private\/)?tmp\/)|~|\$HOME|\.\.))/, why: "recursive+force rm on absolute/home/parent path" },
-  { re: /\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?(bash|sh|zsh|python3?)\b/, why: "remote pipe-to-shell (curl|sh)" },
-  { re: />\s*\/dev\/(r?disk|sd|nvme)/, why: "raw block-device write" },
-  { re: /\bdd\b[^\n]*\bof=\/dev\//, why: "dd to a device" },
-  { re: /\b(mkfs|diskutil\s+erase|fdisk)\b/, why: "disk-format command" },
-  { re: /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:/, why: "fork bomb" },
-  { re: /(^|[;&|\n])\s*git\s+push\b/, why: "git push is outward — denied in autonomous mode" },
-];
-// SOFT_DENY: confirm in interactive (UI) mode, block in autonomous (print) mode.
-const SOFT_DENY: { re: RegExp; why: string }[] = [
-  { re: /\b(pip3?|uv|npm|pnpm|yarn|brew|cargo|gem|go|poetry|pipx)\s+(install|add|i|sync|ci|tool)\b/, why: "network package install" },
-  { re: /(^|[;&|\n]|\s)npx\b/, why: "npx (fetches and runs a package)" },
-  // recursive rm of the project cwd itself (.  ./…  *) — destroys .git checkpoints too
-  { re: /\brm\b(?=[^\n]*(?:-[a-z]*r|--recursive))[^\n]*(?:\s|=|["'])(?:\.(?:\/|\s|$)|\*)/, why: "recursive rm of the project cwd / glob" },
-  { re: /\bgit\s+(reset\s+--hard|clean\s+-[a-z]*f)/, why: "destructive git op" },
-];
-
-function matchDeny(cmd: string, list: { re: RegExp; why: string }[]): string | null {
-  for (const { re, why } of list) if (re.test(cmd)) return why;
-  return null;
-}
+// --- bash guardrail: HARD/STALL/SOFT rules + classifier are in lib/bash-guard-core.mjs (unit-tested) ---
 
 function which(bin: string): boolean {
   return spawnSync("sh", ["-c", `command -v ${bin}`], { encoding: "utf8" }).status === 0;
@@ -92,9 +74,21 @@ export default function (pi: ExtensionAPI) {
     pi.on("tool_call", async (event, ctx) => {
       if (!isToolCallEventType("bash", event)) return;
       const cmd = String(event.input.command ?? "");
-      const hard = matchDeny(cmd, HARD_DENY);
-      if (hard) return { block: true, reason: `Blocked: ${hard}. Adjust the command or stop and replan.` };
-      const soft = matchDeny(cmd, SOFT_DENY);
+      const { verdict, why } = classifyBash(cmd);
+
+      // HARD — always blocked, both modes.
+      if (verdict === "hard") {
+        return { block: true, reason: `Blocked: ${why}. Adjust the command or stop and replan.` };
+      }
+      // STALL — a foreground server/watcher hangs the loop identically in every mode, so block both
+      // (unless disabled) and hand back the non-blocking recipe instead of a flat refusal.
+      if (verdict === "stall" && STALL_GUARD) {
+        return { block: true, reason: stallGuidance(why!, cmd) };
+      }
+      // SOFT — confirm interactively, block in autonomous (-p) mode. A command may be BOTH stall and
+      // soft (`pip install x && npm run dev`); classifyBash returns stall first, so when the stall
+      // block is disabled we still enforce SOFT via softReason() rather than dropping it silently.
+      const soft = verdict === "soft" ? why : softReason(cmd);
       if (soft) {
         if (!ctx.hasUI) {
           return { block: true, reason: `Blocked in autonomous mode: ${soft}. If this is required, note it in PLAN.md for a supervised run.` };
