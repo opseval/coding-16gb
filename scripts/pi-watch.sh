@@ -14,7 +14,7 @@
 #   PI_MAX_ITERS=40       max resume iterations
 #   PI_COOLDOWN=45        seconds idle between iterations (thermal recovery)
 #   PI_TOOLS=read,bash,edit,write,grep,find,ls,verify,docs
-#   PI_THINKING=medium
+#   PI_THINKING=off
 #   PI_SKILLS="plan verify tdd autonomy docs"   # loaded from <agent-dir>/skills
 #   PI_WATCH_WORKDIR=$PWD  # where PLAN.md / NOTES.md live (the repo being worked)
 #   PI_LOG=~/pi-session.log
@@ -26,13 +26,15 @@ MAX_WALL="${PI_MAX_WALL:-14400}"
 MAX_ITERS="${PI_MAX_ITERS:-40}"
 COOLDOWN="${PI_COOLDOWN:-45}"
 TOOLS="${PI_TOOLS:-read,bash,edit,write,grep,find,ls,verify,docs}"
-THINKING="${PI_THINKING:-medium}"
+# off by default — matches launch.sh + the on-device A/B (thinking-on regresses the loop);
+# inert for non-reasoning primaries; opt in with PI_THINKING=medium for a deep autonomous run.
+THINKING="${PI_THINKING:-off}"
 WORKDIR="${PI_WATCH_WORKDIR:-$PWD}"
 LOG="${PI_LOG:-$HOME/pi-session.log}"
 # Force compaction between iterations once the session context reaches this many tokens.
-# Print mode (`pi -p`) does NOT auto-compact (only the interactive/rpc path does), so an
-# autonomous loop must trigger it or it starves its own output budget near the context window.
-# Default = models.json contextWindow (32768) - settings.json reserveTokens (12288) = 20480.
+# Pi >= 0.80 print mode auto-compacts (pre-prompt + after each agent run) from settings.json,
+# but never MID-run — this backstop still bounds how big an iteration can start. Keep it
+# coupled to the client config: contextWindow (32768) - settings.json reserveTokens (12288).
 COMPACT_AT="${PI_COMPACT_AT:-20480}"
 PI_AGENT="${PI_CODING_AGENT_DIR:-${PI_AGENT_DIR:-$HOME/.pi/agent}}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -98,9 +100,10 @@ print(tot)
 PY
 }
 
-# Force a compaction when the session has grown past COMPACT_AT. Print mode never
-# compacts on its own, so without this an autonomous run starves its own output
-# budget near the context window (finish_reason "length", ~0 output). Fail-soft:
+# Force a compaction when the session has grown past COMPACT_AT — a between-iterations
+# backstop for Pi >= 0.80's native checks (pre-submit/agent_end, even in print mode),
+# which never run MID-run: bounding iteration START size keeps the run away from the
+# zero-cliff (window - 4096) where even the compaction summary starves. Fail-soft:
 # a missing helper/python must not stop the run — compaction is a health measure,
 # not a correctness gate.
 maybe_compact() {
@@ -132,7 +135,7 @@ while :; do
      "${skill_args[@]}" "${ext_args[@]}" "$MSG" >>"$LOG" 2>&1 || echo "pi-watch: agent exited non-zero (crash/OOM?)" | tee -a "$LOG"
 
   if is_done; then echo "pi-watch: <<DONE>> found — task complete" | tee -a "$LOG"; notify "session complete"; break; fi
-  # Compact before the next iteration if the session has grown too large (print mode won't do it itself).
+  # Compact before the next iteration if the session has grown too large (bounds iteration START size).
   maybe_compact
   echo "pi-watch: not done, cooling ${COOLDOWN}s then resuming" | tee -a "$LOG"
   sleep "$COOLDOWN"

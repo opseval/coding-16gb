@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
-"""One-shot forced compaction of a Pi session — for autonomous (print-mode) loops.
+"""One-shot forced compaction of a Pi session — a between-iterations backstop for autonomous loops.
 
 WHY THIS EXISTS
-    Pi runs threshold ("auto") compaction only in its interactive / rpc submit path
-    (agent-session `_checkCompaction`, called before each prompt submission). Print
-    mode (`pi -p`, used by pi-watch.sh) has NO compaction: dist/modes/print-mode.js
-    contains no compaction call. So a long autonomous run accumulates context across
-    iterations until it approaches the model's context window, at which point Pi's
-    output budget (contextWindow - promptTokens - safety) collapses toward zero and
-    the model returns finish_reason "length" with ~no output — the "maximum output
-    token limit" stall, from which a print-mode loop cannot recover.
+    Pi >= 0.80 runs threshold ("auto") compaction in AgentSession — checked before each
+    prompt submission and again after each full agent run, in interactive, rpc AND print
+    mode (pre-0.80 print mode had none; this helper was the only defense then). But the
+    check NEVER runs between tool-call rounds inside one run: a single iteration can grow
+    far past the threshold while Pi's per-request output budget (contextWindow -
+    promptTokens - 4096) collapses toward zero, and past contextWindow - 4096 even the
+    compaction summary request is clamped to ~nothing — an unrecoverable wedge (this
+    helper starves there too; nothing client-side recovers). Forcing a compaction BETWEEN
+    iterations bounds how large an iteration can START, keeping the loop away from that
+    cliff.
 
     This helper drives ONE `pi --mode rpc` process, issues a manual `compact`
     command (the same AgentSession.compact() the interactive `/compact` uses — the
     clean path, not the auto-retry path), waits for `compaction_end`, and exits.
-    pi-watch.sh calls it between iterations once the session crosses a threshold, so
+    pi-watch.sh calls it between iterations once the session crosses COMPACT_AT, so
     each iteration resumes from a compacted, low-token session with a healthy output
     budget.
 
